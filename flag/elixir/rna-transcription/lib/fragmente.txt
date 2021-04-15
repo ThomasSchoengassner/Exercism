@@ -1,0 +1,24 @@
+    #def get_rna(A), do: 'U'
+    #def get_rna(C), do: 'G'
+    #def get_rna(G), do: 'C'
+    #def get_rna(T), do: 'A'
+    #def get_rna(_), do: 'Error'
+
+    transcriptionMap = %{'A' => 'U', 'C' => 'G', 'G' => 'C', 'T' => 'A'}
+
+    def transcript(%{'A' => rna} = transcriptionMap), do: rna
+    def transcript(%{'C' => rna} = transcriptionMap), do: rna
+    def transcript(%{'G' => rna} = transcriptionMap), do: rna
+    def transcript(%{'T' => rna} = transcriptionMap), do: rna
+
+    #@spec to_rna([char]) :: [char]
+    def to_rna(dna) do
+      IO.inspect(dna,label: "dna")
+      rna = for d <- dna do
+          #dna_map  = %{dna: d}
+          #RnaTranscription.get_rna(dna_map)
+          #RnaTranscription.get_rna(d)
+              transcript(d)
+            end
+      IO.inspect(rna, label: "rna")
+      end
