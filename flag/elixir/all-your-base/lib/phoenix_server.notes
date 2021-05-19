@@ -1,0 +1,7 @@
+phoenix web server
+
+git clone ..
+mix phx-new --no-ecto rescue-content-update-api
+
+
+
