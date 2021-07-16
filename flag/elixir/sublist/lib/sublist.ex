@@ -4,31 +4,23 @@ defmodule Sublist do
   and if not whether it is equal or unequal to the second list.
   """
 
-  defp is_sublist(x, y) do
-    cond do
-      Enum.take(y, length(x)) === x ->
-        true
-
-      length(x) == length(y) ->
-        false
-
-      true ->
-        [_h | t] = y
-        is_sublist(x, t)
-    end
-  end
-
-  @spec compare(list, list) :: :equal | false | :unequal
   def compare(a, b) do
-    len_a = length(a)
-    len_b = length(b)
+    compare_lists(a, b, length(a), length(b))
+  end
 
+  defp compare_lists([], x2, _, _) when x2 != [], do: :sublist
+
+  defp compare_lists(x1, [], _, _) when x1 != [], do: :superlist
+
+  defp compare_lists(x1, x2, l1, l2) do
     cond do
-      len_a == len_b -> (a === b && :equal) || :unequal
-      len_a < len_b -> (is_sublist(a, b) && :sublist) || :unequal
-      len_a > len_b -> (is_sublist(b, a) && :superlist) || :unequal
+      l1 < l2 -> (is_sublist?(x1, x2, l1) && :sublist) || :unequal
+      l1 > l2 -> (is_sublist?(x2, x1, l2) && :superlist) || :unequal
+      l1 == l2 -> (x1 == x2 && :equal) || :unequal
     end
   end
+
+  defp is_sublist?(a, b, l), do: a in Enum.chunk_every(b, l, 1, :discard)
 end
 
 """
@@ -46,6 +38,33 @@ def sublist?([], _), do: false
 
 def sublist?([_ | t] = a, b) do
   List.starts_with?(a, b) or sublist?(t, b)
+end
+
+---------- Andere Lösung
+defp is_sublist(x, y) do
+  cond do
+    Enum.take(y, length(x)) === x ->
+      true
+
+    length(x) == length(y) ->
+      false
+
+    true ->
+      [_h | t] = y
+      is_sublist(x, t)
+  end
+end
+
+@spec compare(list, list) :: :equal | false | :unequal
+def compare(a, b) do
+  len_a = length(a)
+  len_b = length(b)
+
+  cond do
+    len_a == len_b -> (a === b && :equal) || :unequal
+    len_a < len_b -> (is_sublist(a, b) && :sublist) || :unequal
+    len_a > len_b -> (is_sublist(b, a) && :superlist) || :unequal
+  end
 end
 
 ---------- Alte Lösung
