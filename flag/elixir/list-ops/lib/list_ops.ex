@@ -5,12 +5,12 @@ defmodule ListOps do
   # for adding numbers), but please do not use Kernel functions for Lists like
   # `++`, `--`, `hd`, `tl`, `in`, and `length`.
 
-  defp elements([_head | tail], n), do: elements(tail, n + 1)
-  defp elements([], n), do: n
+  defp count([_head | tail], n), do: count(tail, n + 1)
+  defp count([], n), do: n
 
   @spec count(list) :: non_neg_integer
   def count(l) do
-    elements(l, 0)
+    count(l, 0)
   end
 
   defp mirror([head | tail], list), do: mirror(tail, [head | list])
@@ -60,17 +60,29 @@ defmodule ListOps do
     |> mirror([])
   end
 
-  defp concat(list, [head|tail]) do
-    case is_list(head) do
-      true -> append(list,head)
-      false -> [head | list]
-    end
-    |> concat(tail)
+  defp concat([head | tail], l) do
+    l =
+      case count(head) do
+        0 ->
+          l
+
+        1 ->
+          add_items(l, head)
+
+        _ ->
+          head_list = mirror(head, [])
+          add_items(l, head_list)
+      end
+
+    concat(tail, l)
   end
-  defp concat(list, []),do: list
+
+  defp concat([], l), do: l
 
   @spec concat([[any]]) :: [any]
   def concat(ll) do
-    concat([], ll)
+    ll
+    |> mirror([])
+    |> concat([])
   end
 end
