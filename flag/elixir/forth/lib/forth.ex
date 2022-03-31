@@ -1,28 +1,6 @@
 defmodule Forth do
   @opaque evaluator :: Integer.t()
 
-  defstruct DUP: ["DUP"], DROP: ["DROP"], SWAP: ["SWAP"], OVER: ["OVER"]
-
-  @val 12
-  @words ~w(DUP DROP SWAP OVER)
-  @digits ~w(1 2 3 4 5 6 7 8 9)
-  @operators ~w(+ - * /)
-
-  defp operation("+"), do: &(&1 + &2)
-  defp operation("-"), do: &(&1 - &2)
-  defp operation("*"), do: &(&1 * &2)
-  defp operation("/"), do: &(&1 / &2)
-
-  defp aggregate(_agg, [], _func), do: raise(Forth.DivisionByZero, [])
-  defp aggregate(agg, list, func), do: Enum.reduce(list, agg, fn x, agg -> func.(agg, x) end)
-
-  defp manipulate(_word, []), do: raise(Forth.StackUnderflow, [])
-  defp manipulate(word, list) when length(list) == 1 and word in ["SWAP", "OVER"], do: raise(Forth.StackUnderflow, [])
-  defp manipulate("DUP", list), do: [Enum.at(list, 0) | list]
-  defp manipulate("DROP", list), do: list |> List.pop_at(0) |> elem(1)
-  defp manipulate("SWAP", list), do: [Enum.at(list, 1) | list] |> List.delete_at(2)
-  defp manipulate("OVER", list), do: [Enum.at(list, 1) | list]
-
   @doc """
   Create a new evaluator.
 
@@ -45,50 +23,96 @@ defmodule Forth do
 
   @spec new() :: evaluator
   def new() do
-    IO.inspect(%Forth{DUP: "OVER"}, label: "***********************")
-    IO.inspect(@val+12)
-    @val = @val * 100
-    IO.inspect(@val+12)
+    evaluator = %{"DUP" => ["DUP"], "DROP" => ["DROP"], "SWAP" => ["SWAP"], "OVER" => ["OVER"]}
 
-    #%{ Forth | DROP: ["DUP"]}
+    {:ok, ev} = Agent.start_link(fn -> evaluator end)
 
-    []
+    ev
   end
 
   @doc """
   Evaluate an input string, updating the evaluator state.
   """
-  @spec eval(evaluator, String.t()) :: evaluator
-  # def eval(ev, ""), do: Enum.reverse(ev)
 
-  def eval(ev, s) do
-    IO.inspect(%Forth{}, label: "-----------------------")
+  @spec operation(String.t()) :: function
+  def operation("+"), do: &(&1 + &2)
+  def operation("-"), do: &(&1 - &2)
+  def operation("*"), do: &(&1 * &2)
+  def operation("/"), do: &(&1 / &2)
 
-    s
-    |> String.split([" ", <<0>>, <<1>>, "\u1680", "\n", "\t", "\r"])
-    |> (&stack_handler(ev, &1)).()
+  defp arithmetic_operation([_ | []], _op), do: raise(Forth.DivisionByZero, [])
+
+  defp arithmetic_operation([agg | list], op) do
+    list
+    |> Enum.reduce(agg, &operation(op).(&2, &1))
+  catch
+    ArithmeticError -> raise(Forth.DivisionByZero, [])
   end
 
-  def stack_handler(ev, []), do: Enum.reverse(ev)
+  @spec manipulate(String, [String.t()]) :: [String.t()]
+  def manipulate("DROP", []), do: raise(Forth.StackUnderflow, [])
+  def manipulate("DUP", []), do: raise(Forth.StackUnderflow, [])
+  def manipulate("OVER", list) when length(list) <= 1, do: raise(Forth.StackUnderflow, [])
+  def manipulate("SWAP", list) when length(list) <= 1, do: raise(Forth.StackUnderflow, [])
+  def manipulate("DROP", list), do: list |> List.pop_at(0) |> elem(1)
+  def manipulate("DUP", list), do: [Enum.at(list, 0) | list]
+  def manipulate("OVER", list), do: [Enum.at(list, 1) | list]
+  def manipulate("SWAP", list), do: [Enum.at(list, 1) | list] |> List.delete_at(2)
+  def manipulate(x, []), do: [x]
 
-  def stack_handler(ev, [h | t]) do
-    #IO.inspect(h, label: "\n")
-    #IO.inspect(t)
+  @spec eval(evaluator, String.t()) :: evaluator
+  def eval(ev, s) do
     cond do
-      h in @digits ->
-        stack_handler([String.to_integer(h) | ev], t)
+      String.match?(s, ~r{^:\s*\d\s*\d\s*;$}) ->
+        inv = String.split(s, [" ", ";", ":"], trim: true) |> hd()
+        raise(Forth.InvalidWord, word: inv)
 
-      h in @operators ->
-        [agg | list] = Enum.reverse(ev)
+      String.match?(s, ~r{^:.*;$}) ->
+        [command | instruction] =
+          String.split(s, [" ", ";", ":"], trim: true)
+          |> Enum.map(&String.upcase/1)
 
-        aggregate(agg, list, operation(h))
+        Agent.update(ev, Map, :put, [command, instruction], 4000)
+        ev
+
+      String.match?(s, ~r{^:\s(.*)\s(.*)\s;\s(.*)$}) ->
+        sl = String.split(s, ~r{[:|;|\s]}, trim: true)
+
+        Agent.update(ev, Map, :put, [Enum.at(sl, 0), [Enum.at(sl, 1)]], 4000)
+
+        s_list =
+          sl
+          |> Enum.at(2)
+          |> List.wrap()
+
+        stack_handler([], ev, s_list)
+
+      true ->
+        s_list = String.split(s, [" ", <<0>>, <<1>>, "\u1680", "\n", "\t", "\r"], trim: true)
+        stack_handler([], ev, s_list)
+    end
+  end
+
+  @spec stack_handler([String.t()], pid(), [String.t()]) :: [String.t()]
+  def stack_handler(s_ev, _ev, []), do: Enum.reverse(s_ev)
+
+  def stack_handler(s_ev, ev, [h | t]) do
+    cond do
+      String.match?(h, ~r{\d}) ->
+        stack_handler([String.to_integer(h) | s_ev], ev, t)
+
+      String.upcase(h) in Agent.get(ev, Map, :keys, [], 4000) ->
+        Agent.get(ev, Map, :get, [String.upcase(h)])
+        |> Enum.reduce(s_ev, &manipulate(&1, &2))
+        |> stack_handler(ev, t)
+
+      String.match?(h, ~r{^[-|\/|*|+]$}) ->
+        s_ev
+        |> Enum.reverse()
+        |> arithmetic_operation(h)
         |> floor
         |> List.wrap()
-        |> stack_handler(t)
-
-      String.upcase(h) in @words ->
-        manipulate(String.upcase(h), ev)
-        |> stack_handler(t)
+        |> stack_handler(ev, t)
 
       true ->
         raise(Forth.UnknownWord, word: h)
@@ -101,7 +125,10 @@ defmodule Forth do
   """
   @spec format_stack(evaluator) :: String.t()
   def format_stack(ev) do
-    Enum.join(ev, " ")
+    case is_list(ev) do
+      true -> Enum.join(ev, " ")
+      false -> ""
+    end
   end
 
   defmodule StackUnderflow do
