@@ -1,0 +1,5 @@
+python3 -m pytest -o markers=task -v exchange_test.py
+pytest -v exchange_test.py
+
+--- einen bestimmten Test im Testmodul ausführen
+python -m unittest exchange_test.CurrencyExchangeTest.test_get_number_of_bills
